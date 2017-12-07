@@ -81,7 +81,9 @@ def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
         elif color_space == 'YUV':
             feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
         elif color_space == 'YCrCb':
-            feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)    
+            feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
+        elif color_space == 'LAB':
+            feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)    
 
         if spatial_feat == True:
             spatial_features = bin_spatial(feature_image, size=spatial_size)
@@ -157,7 +159,7 @@ def slide_window(img, x_start_stop=[None, None], y_start_stop=[None, None],
     return window_list
 
 
-def draw_boxes(img, bboxes, color=(0, 255, 0), thick=6):
+def draw_boxes(img, bboxes, color=(0, 255, 0), thick=4):
     '''
     Define a function to draw bounding boxes
     '''
@@ -191,7 +193,9 @@ def single_img_features(img, color_space='RGB', spatial_size=(32, 32),
     elif color_space == 'YUV':
         feature_image = cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
     elif color_space == 'YCrCb':
-        feature_image = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)   
+        feature_image = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb) 
+    elif color_space == 'LAB':
+        feature_image = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)  
     #3) Compute spatial features if flag is set
     if spatial_feat == True:
         spatial_features = bin_spatial(feature_image, size=spatial_size)
@@ -254,19 +258,23 @@ def search_windows(img, windows, clf, scaler, color_space='RGB',
     return on_windows
 
 def convert_color(img, conv='RGB2YCrCb'):
-    if conv == 'RGB2YCrCb':
+    if conv == 'RGB2YCrCb' or conv == 'YCrCb':
         return cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
     if conv == 'BGR2YCrCb':
         return cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-    if conv == 'RGB2LUV':
+    if conv == 'RGB2LUV' or conv == 'LUV':
         return cv2.cvtColor(img, cv2.COLOR_RGB2LUV)
-    if conv == 'RGB2YUV':
+    if conv == 'RGB2YUV' or conv == 'YUV':
         return cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
-    if conv == 'RGB2HLS':
+    if conv == 'RGB2HLS' or conv == 'HLS':
         return cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
+    if conv == 'RGB2HSV' or conv == 'HSV':
+        return cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    if conv == 'RGB2LAB' or conv == 'LAB':
+        return cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
 
 
-def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins):
+def find_cars(img, ystart, ystop, xstart, xstop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins, hog_channel, conv_color):
     
     draw_img = np.copy(img)
     # Uncomment the following line if you extracted training
@@ -274,9 +282,9 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
     # image you are searching is a .jpg (scaled 0 to 255)
     #img = img.astype(np.float32)/255
     
-    img_tosearch = img[ystart:ystop,:,:]
+    img_tosearch = img[ystart:ystop,xstart:xstop,:]
     #ctrans_tosearch = convert_color(img_tosearch, conv='RGB2LUV')
-    ctrans_tosearch = convert_color(img_tosearch, conv='RGB2YCrCb')
+    ctrans_tosearch = convert_color(img_tosearch, conv=conv_color)
     #ctrans_tosearch = img_tosearch
     if scale != 1:
         imshape = ctrans_tosearch.shape
@@ -312,8 +320,22 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
             # Extract HOG for this patch
             hog_feat1 = hog1[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
             hog_feat2 = hog2[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
-            hog_feat3 = hog3[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
-            hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3))
+            hog_feat3 = hog3[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel()
+            
+            
+            if hog_channel == 'ALL':
+                hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3))
+            elif hog_channel == 0:
+                hog_features = hog_feat1
+            elif hog_channel == 1:
+                hog_features = hog_feat2
+            elif hog_channel == 2:
+                hog_features = hog_feat3
+
+            
+            
+            
+                
 
             xleft = xpos*pix_per_cell
             ytop = ypos*pix_per_cell
@@ -331,7 +353,8 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
             test_prediction = svc.predict(test_features)
             
             if test_prediction == 1:
-                xbox_left = np.int(xleft*scale)
+                #xbox_left = np.int(xleft*scale)
+                xbox_left = np.int(xleft*scale + xstart)
                 ytop_draw = np.int(ytop*scale)
                 win_draw = np.int(window*scale)
                 upper_left = (xbox_left, ytop_draw+ystart)
@@ -369,7 +392,7 @@ def draw_labeled_bboxes(img, labels):
         # Define a bounding box based on min/max x and y
         bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
         # Draw the box on the image
-        cv2.rectangle(img, bbox[0], bbox[1], (0,255,0), 6)
+        cv2.rectangle(img, bbox[0], bbox[1], (0,255,0), 4)
     # Return the image
     return img
 
