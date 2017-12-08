@@ -282,7 +282,7 @@ def convert_color(img, conv='RGB2YCrCb'):
         return cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
 
 
-def find_cars(img, ystart, ystop, xstart, xstop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins, hog_channel, conv_color):
+def find_cars(img, ystart, ystop, xstart, xstop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins, hog_channel, conv_color, vis=False, box_color=(0,255,0)):
     
     draw_img = np.copy(img)
     # Uncomment the following line if you extracted training
@@ -291,9 +291,8 @@ def find_cars(img, ystart, ystop, xstart, xstop, scale, svc, X_scaler, orient, p
     #img = img.astype(np.float32)/255
     
     img_tosearch = img[ystart:ystop,xstart:xstop,:]
-    #ctrans_tosearch = convert_color(img_tosearch, conv='RGB2LUV')
     ctrans_tosearch = convert_color(img_tosearch, conv=conv_color)
-    #ctrans_tosearch = img_tosearch
+    
     if scale != 1:
         imshape = ctrans_tosearch.shape
         ctrans_tosearch = cv2.resize(ctrans_tosearch, (np.int(imshape[1]/scale), np.int(imshape[0]/scale)))
@@ -330,7 +329,6 @@ def find_cars(img, ystart, ystop, xstart, xstop, scale, svc, X_scaler, orient, p
             hog_feat2 = hog2[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
             hog_feat3 = hog3[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel()
             
-            
             if hog_channel == 'ALL':
                 hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3))
             elif hog_channel == 0:
@@ -340,17 +338,20 @@ def find_cars(img, ystart, ystop, xstart, xstop, scale, svc, X_scaler, orient, p
             elif hog_channel == 2:
                 hog_features = hog_feat3
 
-            
-            
-            
-                
-
             xleft = xpos*pix_per_cell
             ytop = ypos*pix_per_cell
 
             # Extract the image patch
             subimg = cv2.resize(ctrans_tosearch[ytop:ytop+window, xleft:xleft+window], (64,64))
-          
+            
+            if vis == True:
+                xbox_left = np.int(xleft*scale + xstart)
+                ytop_draw = np.int(ytop*scale)
+                win_draw = np.int(window*scale)
+                upper_left = (xbox_left, ytop_draw+ystart)
+                lower_right = (xbox_left+win_draw,ytop_draw+win_draw+ystart)
+                cv2.rectangle(draw_img, upper_left, lower_right, box_color, 3)
+
             # Get color features
             spatial_features = bin_spatial(subimg, size=spatial_size)
             hist_features = color_hist(subimg, nbins=hist_bins)
@@ -367,11 +368,14 @@ def find_cars(img, ystart, ystop, xstart, xstop, scale, svc, X_scaler, orient, p
                 win_draw = np.int(window*scale)
                 upper_left = (xbox_left, ytop_draw+ystart)
                 lower_right = (xbox_left+win_draw,ytop_draw+win_draw+ystart)
-                #cv2.rectangle(draw_img, upper_left, lower_right, (0,255,0), 6)
+                if vis == True:
+                    cv2.rectangle(draw_img, upper_left, lower_right, box_color, 4)
                 boxlist.append((upper_left, lower_right))
-                
-    #return draw_img, boxlist
-    return boxlist
+    
+    if vis == True:
+        return draw_img, boxlist
+    else:
+        return boxlist
 
 def add_heat(heatmap, bbox_list):
     # Iterate through list of bboxes
@@ -379,9 +383,7 @@ def add_heat(heatmap, bbox_list):
         # Add += 1 for all pixels inside each bbox
         # Assuming each "box" takes the form ((x1, y1), (x2, y2))
         heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
-
-    # Return updated heatmap
-    return heatmap# Iterate through list of bboxes
+    return heatmap
     
 def apply_threshold(heatmap, threshold):
     # Zero out pixels below the threshold
@@ -404,3 +406,10 @@ def draw_labeled_bboxes(img, labels):
     # Return the image
     return img
 
+def save_image(filename, image, RGB=False):
+    print("Saving {}".format(filename))
+    # NOTE: image[:, :, ::-1] reverses the (default BRG from cv2.imwrite) values to RGB (what we expect to see)
+    img = image
+    if RGB:
+        img = image[:, :, ::-1]
+    cv2.imwrite('{}'.format(filename), img)
