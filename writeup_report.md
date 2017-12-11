@@ -67,27 +67,27 @@ Based on recommendation in the lessons, the `orientation` parameter is usuall be
 
 #### 3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
 
-In code cell# 10 in the `detect-cars.ipynb`, I trained a linear SVM using 20,837 cars and 21,132 notcars. Of the entire dataset, 20% was saved for testing, while the rest was used for training the classifier.
+In code cell# 10 in the `detect-cars.ipynb`, I trained a linear SVM using 20,837 cars and 21,132 notcars. Of the entire dataset, 20% was saved for testing, while the rest was used for training the classifier. I used the the `GridSearchCV` to automate finding the optimal parameter `C` for training the classifier. The optimal parameter `C`, used for controlling the balance between training accuracy and generalization, was found to be 0.0001 from a choice of 0.001, 0.0001, and 0.00001. The trained classifer resulted in a test accuracy of 0.9926.
 
 ### Sliding Window Search
 
 #### 1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
 
-In `slide_window()` funtion of `vehicle_detection_helper.py`, I implemented the sliding window search. The sliding search implementation was very slow due to the function requiring to extract features for each individual search window. Here's an example result that took over 3 seconds to execute on a single frame image:
+In `slide_window()` funtion of `vehicle_detection_helper.py`, I implemented the sliding window search. The sliding search implementation was very slow due to the function requiring to extract features for each individual search window. Here's an example result that took 2.8 seconds to execute on a single frame image:
 
 ![alt text][sliding-window]
 
-In order to achieve a similar outcome, but at a higher speed, a HOG subsampling search was implemented instead. In `find_cars()` function in `vehicle_detection_helper.py`, instead of extracting hog features per window patch, an entire frame image is fed into the hog feature extraction in one shot. Then a search partition to the image is sampled, a window at a time, using the classifier to predict whether each window matches a car or not. Because of the single-shot hog extraction, this subsampling method is much quicker. I was able to run find_cars() 4 times, oversampling the image and still ended up taking up only about .5 seconds. Here, we have a image showing the 4 subsampling patches in the region of interest:
+In order to achieve a similar outcome, but at a higher speed, a HOG subsampling search was implemented instead. In `find_cars()` function in `vehicle_detection_helper.py`, instead of extracting hog features per window patch, an entire frame image is fed into the hog feature extraction in one shot. Then a search partition to the image is sampled, a window at a time, using the classifier to predict whether each window matches a car or not. Because of the single-shot hog extraction, this subsampling method is much quicker. I was able to run find_cars() 3 times, oversampling the image and still ended up taking up a much lower time of 1.65 seconds. Here, we have a image showing the 3 subsampling regions of interest:
 
  ![alt text][hog-subsampling]
 
-By sampling partial regions of the image, even abandoning some areas along the x-axis, execution time was reduced significantly. In the subsampling, scaling factors were chosen for each of the subsampling runs. Here, I chose scaling factors of `[2.5, 2.0, 1.5, 1.25]` (See cell# 13 of `detect-cars.ipynb`.) As seen below, the result is similar to the sliding window method, but at a much lower cost in time of execution at 0.55 seconds.
+By sampling partial regions of the image, even ignoring some areas along the x-axis, execution time was reduced significantly. In the subsampling, scaling factors were chosen for each of the subsampling runs. Here, I chose scaling factors of `[2.25, 1.5, 1.0]` (See cell# 13 of `detect-cars.ipynb`.) As seen below, the result is similar to the sliding window method, but at a much lower cost in time of execution at 1.65 seconds.
 
 ![alt text][hog-subsampling-result]
 
 #### 2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
 
-In the end I searched on 4 scales using LUV 3-channel HOG features in addition to spatially binned color and histograms of color in the feature vector, providing a nice result.  Here are some example images:
+In the end I searched on 3 scales using LUV 3-channel HOG features in addition to spatially binned color and histograms of color in the feature vector, providing a nice result.  Here are some example images:
 
 ![alt-text][pipeline1]
 ![alt-text][pipeline2]
@@ -108,6 +108,8 @@ I recorded the positions of positive detections in each frame of the video.  Fro
 Here's an example result showing the heatmap from a test image, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the image showing the car positions:
 
 ![alt text][labels-heat]
+
+In order to obtain more stable bounding boxes around detected cars, I also added frame-to-frame tracking in the pipeline. After a heatmap is generated, the heatmap is stored in a python deque such that once the deque is filled to a specified max length (e.g., 5), subsequent frames will be enqueued at the end of the history frame tracking deque. Older frames at the front of the deque will be discarded. At every frame then, the average of the bounding box positions from the frames in the deque is computed and used for drawing the final box on the presented image. See code cell# 17, lines 83-97 of the `detect-cars.ipynb`. The result of using the frame-to-frame position tracking is a more stable bounding box going from frame to frame in the output video.
 
 ---
 
